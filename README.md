@@ -915,3 +915,470 @@ void remove_user(const char *username, int sock) {
 }
 ```
 Fungsi ini menghapus pengguna tertentu dari sistem.
+
+# D. Admin Channel
+
+- Setiap user yang membuat channel otomatis menjadi admin di channel tersebut. Informasi tentang user disimpan dalam file `auth.csv`.
+- Admin dapat create, update, dan delete pada channel dan room, serta dapat remove, ban, dan unban user di channel mereka.
+
+## 1. Channel
+Program ini menampilkan informasi tentang semua channel disimpan dalam file `channel.csv`. Semua perubahan dan aktivitas user pada channel dicatat dalam file `users.log`.
+
+## Penggunaan
+Program ini mendukung tiga perintah utama: `CREATE CHANNEL channel -k key`, `EDIT CHANNEL old_channel TO new_channel`, dan `DEL CHANNEL channel`.
+
+### Membuat Channel
+Untuk membuat channel, gunakan perintah berikut:
+```sh
+[user] CREATE CHANNEL channel -k key
+Channel channel dibuat
+```
+Contoh:
+```sh
+[qurbancare] CREATE CHANNEL care -k care123
+Channel care dibuat
+```
+
+### Mengedit Channel
+Untuk mengedit channel, gunakan perintah berikut:
+```sh
+[user] EDIT CHANNEL old_channel TO new_channel
+old_channel berhasil diubah menjadi new_channel
+```
+Contoh:
+```sh
+[qurbancare] EDIT CHANNEL care TO cera
+care berhasil diubah menjadi cera
+```
+
+### Menghapus Channel
+Untuk menghapus channel, gunakan perintah berikut:
+```sh
+[user] DEL CHANNEL channel
+channel berhasil dihapus
+```
+Contoh:
+```sh
+[qurbancare] DEL CHANNEL cera
+cera berhasil dihapus
+````
+
+## Penjelasan Kode
+
+### Fungsi Utama
+1. **create_channel()**
+   - Membuat channel baru untuk percakapan.
+
+2. **edit_channel()**
+   - Mengubah nama channel yang ada.
+  
+3. **delete_channel()**
+   - Menghapus channel tertentu.
+  
+### Create Channel
+```c
+void create_channel(const char *username, const char *channel_name, const char *key, int sock) {
+    char response[BUFFER_SIZE];
+    if (channel_exists(channel_name)) {
+        snprintf(response, sizeof(response), "Channel %s already exists\n", channel_name);
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    char encrypted_key[256];
+    encrypt_password(key, encrypted_key);
+
+    Channel new_channel;
+    new_channel.id_channel = 1; // This should be incremented based on the existing channels
+    strcpy(new_channel.name, channel_name);
+    strcpy(new_channel.key, encrypted_key);
+
+    save_channel(new_channel);
+    snprintf(response, sizeof(response), "Channel %s created successfully\n", channel_name);
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini membuat channel baru untuk percakapan.
+
+### Edit Channel
+```c
+void edit_channel(const char *old_channel_name, const char *new_channel_name, int sock) {
+    char response[BUFFER_SIZE];
+    char line[256];
+    char updated_line[BUFFER_SIZE];
+    char stored_channel_name[50], stored_key[256];
+    int found = 0;
+
+    FILE *file = fopen(CHANNELS_FILE, "r+");
+    if (file == NULL) {
+        snprintf(response, sizeof(response), "Failed to open channels file\n");
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    FILE *temp_file = fopen("/tmp/channels_temp.csv", "w");
+    if (temp_file == NULL) {
+        snprintf(response, sizeof(response), "Failed to create temp file\n");
+        send(sock, response, strlen(response), 0);
+        fclose(file);
+        return;
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        sscanf(line, "%*d,%[^,],%s", stored_channel_name, stored_key);
+        if (strcmp(old_channel_name, stored_channel_name) == 0) {
+            found = 1;
+            strcpy(stored_channel_name, new_channel_name);
+            snprintf(updated_line, sizeof(updated_line), "%s,%s\n", stored_channel_name, stored_key);
+            fputs(updated_line, temp_file);
+        } else {
+            fputs(line, temp_file);
+        }
+    }
+
+    fclose(file);
+    fclose(temp_file);
+
+    if (found) {
+        remove(CHANNELS_FILE);
+        rename("/tmp/channels_temp.csv", CHANNELS_FILE);
+        snprintf(response, sizeof(response), "Channel %s updated successfully\n", old_channel_name);
+    } else {
+        remove("/tmp/channels_temp.csv");
+        snprintf(response, sizeof(response), "Channel %s not found\n", old_channel_name);
+    }
+
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini mengubah nama channel yang ada.
+
+### Delete Channel
+```c
+void delete_channel(const char *channel_name, int sock) {
+    char response[BUFFER_SIZE];
+    char line[256];
+    char stored_channel_name[50];
+    int found = 0;
+
+    FILE *file = fopen(CHANNELS_FILE, "r+");
+    if (file == NULL) {
+        snprintf(response, sizeof(response), "Failed to open channels file\n");
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    FILE *temp_file = fopen("/tmp/channels_temp.csv", "w");
+    if (temp_file == NULL) {
+        snprintf(response, sizeof(response), "Failed to create temp file\n");
+        send(sock, response, strlen(response), 0);
+        fclose(file);
+        return;
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        sscanf(line, "%*d,%[^,],%*s", stored_channel_name);
+        if (strcmp(channel_name, stored_channel_name) == 0) {
+            found = 1;
+        } else {
+            fputs(line, temp_file);
+        }
+    }
+
+    fclose(file);
+    fclose(temp_file);
+
+    if (found) {
+        remove(CHANNELS_FILE);
+        rename("/tmp/channels_temp.csv", CHANNELS_FILE);
+        snprintf(response, sizeof(response), "Channel %s deleted successfully\n", channel_name);
+    } else {
+        remove("/tmp/channels_temp.csv");
+        snprintf(response, sizeof(response), "Channel %s not found\n", channel_name);
+    }
+
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini menghapus saluran tertentu.
+
+## 2. Room
+Program ini menampilkan semua perubahan dan aktivitas user pada room dicatat dalam file `users.log`.
+
+## Penggunaan
+Program ini mendukung empat perintah utama: `CREATE ROOM room`, `EDIT ROOM old_room TO new_room`, `DEL ROOM room`, dan `DEL ROOM ALL`.
+
+### Membuat Room
+Untuk membuat room, gunakan perintah berikut:
+```sh
+[user/channel] CREATE ROOM room 
+Room room dibuat
+```
+Contoh:
+```sh
+[qurbancare/care] CREATE ROOM urban
+Room urban dibuat
+```
+
+### Mengedit Room
+Untuk mengedit room, gunakan perintah berikut:
+```sh
+[user/channel] EDIT ROOM old_room TO new_room
+old_room berhasil diubah menjadi new_room
+```
+Contoh:
+```sh
+[qurbancare/care] EDIT ROOM urban TO nabru
+urban berhasil diubah menjadi nabru
+```
+
+### Menghapus Room Tertentu
+Untuk menghapus room tertentu, gunakan perintah berikut:
+```sh
+[user/channel] DEL ROOM room
+room berhasil dihapus
+```
+Contoh:
+```sh
+[qurbancare/care] DEL ROOM nabru
+nabru berhasil dihapus
+```
+
+### Menghapus Semua Room
+Untuk menghapus semua room, gunakan perintah berikut:
+```sh
+[user/channel] DEL ROOM ALL
+Semua room dihapus
+```
+Contoh:
+```sh
+[qurbancare/care] DEL ROOM ALL
+Semua room dihapus
+```
+
+## Penjelasan Kode
+
+### Fungsi Utama
+1. **create_room()**
+   - Membuat room baru dalam channel tertentu.
+
+2. **edit_room()**
+   - Mengubah nama room yang ada dalam channel tertentu.
+  
+3. **delete_room()**
+   - Menghapus room tertentu dalam channel tertentu.
+
+4. **delete_all_rooms()**
+   - Menghapus semua room dalam channel tertentu.
+  
+### Create Room
+```c
+void create_room(const char *channel_name, const char *room_name, int sock) {
+    char response[BUFFER_SIZE];
+    char file_path[100];
+
+    snprintf(file_path, sizeof(file_path), "/home/agnesgriselda/fp/DiscorIT/%s/admin/room_list.csv", channel_name);
+
+    FILE *file = fopen(file_path, "a");
+    if (file == NULL) {
+        snprintf(response, sizeof(response), "Failed to create room\n");
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    fprintf(file, "%s\n", room_name);
+    fclose(file);
+
+    snprintf(response, sizeof(response), "Room %s created successfully\n", room_name);
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini membuat room baru dalam channel tertentu.
+
+### Edit Room
+```c
+void edit_room(const char *channel_name, const char *old_room_name, const char *new_room_name, int sock) {
+    char response[BUFFER_SIZE];
+    char line[256];
+    char updated_line[BUFFER_SIZE];
+    char stored_room_name[50];
+    char file_path[100];
+
+    snprintf(file_path, sizeof(file_path), "/home/agnesgriselda/fp/DiscorIT/%s/admin/room_list.csv", channel_name);
+
+    FILE *file = fopen(file_path, "r+");
+    if (file == NULL) {
+        snprintf(response, sizeof(response), "Failed to open room list file\n");
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    FILE *temp_file = fopen("/tmp/rooms_temp.csv", "w");
+    if (temp_file == NULL) {
+        snprintf(response, sizeof(response), "Failed to create temp file\n");
+        send(sock, response, strlen(response), 0);
+        fclose(file);
+        return;
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        sscanf(line, "%s", stored_room_name);
+        if (strcmp(old_room_name, stored_room_name) == 0) {
+            snprintf(updated_line, sizeof(updated_line), "%s\n", new_room_name);
+            fputs(updated_line, temp_file);
+        } else {
+            fputs(line, temp_file);
+        }
+    }
+
+    fclose(file);
+    fclose(temp_file);
+
+    remove(file_path);
+    rename("/tmp/rooms_temp.csv", file_path);
+
+    snprintf(response, sizeof(response), "Room %s updated to %s successfully\n", old_room_name, new_room_name);
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini mengubah nama room yang ada dalam channel tertentu.
+
+### Delete Room
+```c
+void delete_room(const char *channel_name, const char *room_name, int sock) {
+    char response[BUFFER_SIZE];
+    char line[256];
+    char stored_room_name[50];
+    char file_path[100];
+
+    snprintf(file_path, sizeof(file_path), "/home/agnesgriselda/fp/DiscorIT/%s/admin/room_list.csv", channel_name);
+
+    FILE *file = fopen(file_path, "r+");
+    if (file == NULL) {
+        snprintf(response, sizeof(response), "Failed to open room list file\n");
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    FILE *temp_file = fopen("/tmp/rooms_temp.csv", "w");
+    if (temp_file == NULL) {
+        snprintf(response, sizeof(response), "Failed to create temp file\n");
+        send(sock, response, strlen(response), 0);
+        fclose(file);
+        return;
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        sscanf(line, "%s", stored_room_name);
+        if (strcmp(room_name, stored_room_name) != 0) {
+            fputs(line, temp_file);
+        }
+    }
+
+    fclose(file);
+    fclose(temp_file);
+
+    remove(file_path);
+    rename("/tmp/rooms_temp.csv", file_path);
+
+    snprintf(response, sizeof(response), "Room %s deleted successfully\n", room_name);
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini menghapus room tertentu dalam channel tertentu.
+
+### Delete All Room
+```c
+void delete_all_rooms(const char *channel_name, int sock) {
+    char response[BUFFER_SIZE];
+    char file_path[100];
+
+    snprintf(file_path, sizeof(file_path), "/home/agnesgriselda/fp/DiscorIT/%s/admin/room_list.csv", channel_name);
+
+    remove(file_path);
+
+    snprintf(response, sizeof(response), "All rooms deleted successfully\n");
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini menghapus semua room dalam channel tertentu.
+
+## 3. Ban
+Program ini melarang user untuk melakukan login. Tetapi, data tetap tersimpan dan user tidak dapat masuk ke dalam channel.
+
+## Penggunaan
+Program ini mendukung satu perintah utama: `BAN user1`.
+
+### Melarang User
+Untuk melarang user, gunakan perintah berikut:
+```sh
+[user/channel] BAN user1 
+user1 diban
+```
+Contoh:
+```sh
+[qurbancare/care] BAN pen
+pen diban
+```
+
+## Penjelasan Kode
+
+### Fungsi Utama
+1. **ban_user()**
+   - Melarang pengguna tertentu dari channel tertentu.
+  
+### Ban User
+```c
+void ban_user(const char *channel_name, const char *username, int sock) {
+    char response[BUFFER_SIZE];
+    char line[256];
+    char updated_line[BUFFER_SIZE];
+    char stored_username[50], stored_role[10];
+    int found = 0;
+    char file_path[100];
+
+    snprintf(file_path, sizeof(file_path), "/home/agnesgriselda/fp/DiscorIT/%s/admin/auth.csv", channel_name);
+
+    FILE *file = fopen(file_path, "r+");
+    if (file == NULL) {
+        snprintf(response, sizeof(response), "Failed to open auth file\n");
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    FILE *temp_file = fopen("/tmp/auth_temp.csv", "w");
+    if (temp_file == NULL) {
+        snprintf(response, sizeof(response), "Failed to create temp file\n");
+        send(sock, response, strlen(response), 0);
+        fclose(file);
+        return;
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        sscanf(line, "%*d,%[^,],%s", stored_username, stored_role);
+        if (strcmp(username, stored_username) == 0) {
+            found = 1;
+            strcpy(stored_role, "BANNED");
+            snprintf(updated_line, sizeof(updated_line), "%s,%s\n", stored_username, stored_role);
+            fputs(updated_line, temp_file);
+        } else {
+            fputs(line, temp_file);
+        }
+    }
+
+    fclose(file);
+    fclose(temp_file);
+
+    if (found) {
+        remove(file_path);
+        rename("/tmp/auth_temp.csv", file_path);
+        snprintf(response, sizeof(response), "User %s banned successfully\n", username);
+    } else {
+        remove("/tmp/auth_temp.csv");
+        snprintf(response, sizeof(response), "User %s not found\n", username);
+    }
+
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini melarang pengguna tertentu dari channel tertentu.
