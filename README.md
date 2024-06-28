@@ -337,10 +337,10 @@ Struktur `Channel` menyimpan informasi tentang channel termasuk ID, nama, dan ka
    - Mengirimkan daftar semua channel yang ada ke klien melalui soket yang diidentifikasi oleh `sock`.
   
 3. **list_rooms()**
-   - Mengirimkan daftar semua room yang ada dalam saluran tertentu ke klien.
+   - Mengirimkan daftar semua room yang ada dalam channel tertentu ke klien.
 
 4. **list_users()**
-   - Mengirimkan daftar semua pengguna yang ada dalam saluran tertentu ke klien.
+   - Mengirimkan daftar semua pengguna yang ada dalam channel tertentu ke klien.
 
 ### Fungsi Utama
 ```c
@@ -628,16 +628,16 @@ Jika login berhasil, program akan masuk ke user rootnya dan pengguna dapat berko
 
 ### Fungsi Utama
 1. **chat_message()**
-   - Mengirimkan pesan dari pengguna ke ruangan tertentu dalam saluran tertentu.
+   - Mengirimkan pesan dari pengguna ke room tertentu dalam channel tertentu.
   
 2. **see_chats()**
-   - Mengirimkan riwayat percakapan dari ruangan tertentu dalam saluran tertentu ke klien.
+   - Mengirimkan riwayat percakapan dari room tertentu dalam channel tertentu ke klien.
 
 3. **edit_chat()**
-   - Mengubah pesan tertentu dalam ruangan tertentu berdasarkan ID pesan.
+   - Mengubah pesan tertentu dalam room tertentu berdasarkan ID pesan.
 
 4. **delete_chat()**
-   - Menghapus pesan tertentu dalam ruangan tertentu berdasarkan ID pesan.
+   - Menghapus pesan tertentu dalam room tertentu berdasarkan ID pesan.
 
 ### Chat Message
 ```c
@@ -660,7 +660,7 @@ void chat_message(const char *username, const char *channel_name, const char *ro
     send(sock, response, strlen(response), 0);
 }
 ```
-Fungsi ini mengirimkan pesan dari pengguna ke ruangan tertentu dalam saluran tertentu.
+Fungsi ini mengirimkan pesan dari pengguna ke room tertentu dalam channel tertentu.
 
 ### See Chat
 ```c
@@ -686,7 +686,7 @@ void see_chats(const char *channel_name, const char *room_name, int sock) {
     send(sock, response, strlen(response), 0);
 }
 ```
-Fungsi ini mengirimkan riwayat percakapan dari ruangan tertentu dalam saluran tertentu ke klien.
+Fungsi ini mengirimkan riwayat percakapan dari room tertentu dalam channel tertentu ke klien.
 
 ### Edit Chat
 ```c
@@ -699,7 +699,7 @@ void edit_chat(const char *channel_name, const char *room_name, int chat_id, con
     send(sock, response, strlen(response), 0);
 }
 ```
-Fungsi ini mengubah pesan tertentu dalam ruangan tertentu berdasarkan ID pesan.
+Fungsi ini mengubah pesan tertentu dalam room tertentu berdasarkan ID pesan.
 
 ### Delete Chat
 ```c
@@ -712,4 +712,206 @@ void delete_chat(const char *channel_name, const char *room_name, int chat_id, i
     send(sock, response, strlen(response), 0);
 }
 ```
-Fungsi ini menghapus pesan tertentu dalam ruangan tertentu berdasarkan ID pesan.
+Fungsi ini menghapus pesan tertentu dalam room tertentu berdasarkan ID pesan.
+
+# C. Root
+
+- Akun yang pertama kali mendaftar otomatis mendapatkan peran "root".
+- Root dapat masuk ke channel manapun tanpa key dan create, update, dan delete pada channel dan room, mirip dengan admin [D].
+- Root memiliki kemampuan khusus untuk mengelola user, seperti: list, edit, dan Remove.
+
+## Penggunaan
+Program ini mendukung empat perintah utama: `LIST USER`, `EDIT WHERE user1 -u user01`, `EDIT WHERE user01 -p secretpass`, dan `REMOVE user01`.
+
+### List User
+Untuk menlihat list user, gunakan perintah berikut:
+```sh
+[user] LIST USER
+user1 user2 user3
+```
+Contoh:
+```sh
+[root] LIST USER
+naupan qurbancare bashmi
+```
+
+### Mengedit Nama User
+Untuk mengedit nama user, gunakan perintah berikut:
+```sh
+[user] EDIT WHERE user1 -u user01
+user1 berhasil diubah menjadi user01
+```
+Contoh:
+```sh
+[root] EDIT WHERE naupan -u zika
+naupan berhasil diubah menjadi zika
+```
+
+### Mengedit Password User
+Untuk mengedit password user, gunakan perintah berikut:
+```sh
+[user] EDIT WHERE user01 -p secretpass
+password user01 berhasil diubah
+```
+Contoh:
+```sh
+[root] EDIT WHERE zika -p 123zika
+password zika berhasil diubah
+```
+
+### Menghapus User
+Untuk menghapus, gunakan perintah berikut:
+```sh
+[user] REMOVE user01
+user01 berhasil dihapus
+```
+Contoh:
+```sh
+[root] REMOVE zika
+zika berhasil dihapus
+```
+
+## Penjelasan Kode
+
+### Fungsi Utama
+1. **list_all_users()**
+   - Mengirimkan daftar semua pengguna yang terdaftar ke klien.
+
+2. **edit_user()**
+   - Mengubah informasi pengguna, termasuk nama pengguna dan kata sandi.
+  
+3. **remove_user()**
+   - Menghapus pengguna tertentu dari sistem.
+
+### List User
+```c
+void list_all_users(int sock) {
+    char response[BUFFER_SIZE];
+    char line[256];
+    FILE *file = fopen(USERS_FILE, "r");
+    if (file == NULL) {
+        snprintf(response, sizeof(response), "No users found\n");
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    response[0] = '\0'; // Clear response buffer
+    while (fgets(line, sizeof(line), file)) {
+        char user_name[50];
+        sscanf(line, "%*d,%[^,],%*s,%*s", user_name);
+        strcat(response, user_name);
+        strcat(response, " ");
+    }
+    fclose(file);
+
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini mengirimkan daftar semua pengguna yang terdaftar ke klien.
+
+### Edit User
+```c
+void edit_user(const char *old_username, const char *new_username, const char *new_password, int sock) {
+    char response[BUFFER_SIZE];
+    char line[256];
+    char updated_line[BUFFER_SIZE];
+    char stored_username[50], stored_password[256], stored_role[10];
+    int found = 0;
+
+    FILE *file = fopen(USERS_FILE, "r+");
+    if (file == NULL) {
+        snprintf(response, sizeof(response), "Failed to open users file\n");
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    FILE *temp_file = fopen("/tmp/users_temp.csv", "w");
+    if (temp_file == NULL) {
+        snprintf(response, sizeof(response), "Failed to create temp file\n");
+        send(sock, response, strlen(response), 0);
+        fclose(file);
+        return;
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        sscanf(line, "%*d,%[^,],%[^,],%s", stored_username, stored_password, stored_role);
+        if (strcmp(old_username, stored_username) == 0) {
+            found = 1;
+            if (new_username != NULL) {
+                strcpy(stored_username, new_username);
+            }
+            if (new_password != NULL) {
+                encrypt_password(new_password, stored_password);
+            }
+            snprintf(updated_line, sizeof(updated_line), "%s,%s,%s\n", stored_username, stored_password, stored_role);
+            fputs(updated_line, temp_file);
+        } else {
+            fputs(line, temp_file);
+        }
+    }
+
+    fclose(file);
+    fclose(temp_file);
+
+    if (found) {
+        remove(USERS_FILE);
+        rename("/tmp/users_temp.csv", USERS_FILE);
+        snprintf(response, sizeof(response), "User %s updated successfully\n", old_username);
+    } else {
+        remove("/tmp/users_temp.csv");
+        snprintf(response, sizeof(response), "User %s not found\n", old_username);
+    }
+
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini mengubah informasi pengguna, termasuk nama pengguna dan kata sandi.
+
+### Remove User
+```c
+void remove_user(const char *username, int sock) {
+    char response[BUFFER_SIZE];
+    char line[256];
+    char stored_username[50];
+    int found = 0;
+
+    FILE *file = fopen(USERS_FILE, "r+");
+    if (file == NULL) {
+        snprintf(response, sizeof(response), "Failed to open users file\n");
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    FILE *temp_file = fopen("/tmp/users_temp.csv", "w");
+    if (temp_file == NULL) {
+        snprintf(response, sizeof(response), "Failed to create temp file\n");
+        send(sock, response, strlen(response), 0);
+        fclose(file);
+        return;
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        sscanf(line, "%*d,%[^,],%*s,%*s", stored_username);
+        if (strcmp(username, stored_username) == 0) {
+            found = 1;
+        } else {
+            fputs(line, temp_file);
+        }
+    }
+
+    fclose(file);
+    fclose(temp_file);
+
+    if (found) {
+        remove(USERS_FILE);
+        rename("/tmp/users_temp.csv", USERS_FILE);
+        snprintf(response, sizeof(response), "User %s removed successfully\n", username);
+    } else {
+        remove("/tmp/users_temp.csv");
+        snprintf(response, sizeof(response), "User %s not found\n", username);
+    }
+
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini menghapus pengguna tertentu dari sistem.
