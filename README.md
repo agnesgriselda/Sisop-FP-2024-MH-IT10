@@ -1382,3 +1382,156 @@ void ban_user(const char *channel_name, const char *username, int sock) {
 }
 ```
 Fungsi ini melarang pengguna tertentu dari channel tertentu.
+
+## 4. Unban
+Program ini mencabut larangan user.
+
+## Penggunaan
+Program ini mendukung satu perintah utama: `UNBAN user1`.
+
+### Mencabut Larangan
+Untuk mencabut larangan user, gunakan perintah berikut:
+```sh
+[user/channel] UNBAN user1 
+user1 kembali
+```
+Contoh:
+```sh
+[qurbancare/care] UNBAN pen
+pen kembali
+```
+
+## Penjelasan Kode
+
+### Fungsi Utama
+1. **unban_user()**
+   - Mencabut larangan pengguna tertentu dari saluran tertentu.
+  
+### Unban User
+```c
+void unban_user(const char *channel_name, const char *username, int sock) {
+    char response[BUFFER_SIZE];
+    char line[256];
+    char updated_line[BUFFER_SIZE];
+    char stored_username[50], stored_role[10];
+    int found = 0;
+    char file_path[100];
+
+    snprintf(file_path, sizeof(file_path), "/home/agnesgriselda/fp/DiscorIT/%s/admin/auth.csv", channel_name);
+
+    FILE *file = fopen(file_path, "r+");
+    if (file == NULL) {
+        snprintf(response, sizeof(response), "Failed to open auth file\n");
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    FILE *temp_file = fopen("/tmp/auth_temp.csv", "w");
+    if (temp_file == NULL) {
+        snprintf(response, sizeof(response), "Failed to create temp file\n");
+        send(sock, response, strlen(response), 0);
+        fclose(file);
+        return;
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        sscanf(line, "%*d,%[^,],%s", stored_username, stored_role);
+        if (strcmp(username, stored_username) == 0) {
+            found = 1;
+            strcpy(stored_role, "USER");
+            snprintf(updated_line, sizeof(updated_line), "%s,%s\n", stored_username, stored_role);
+            fputs(updated_line, temp_file);
+        } else {
+            fputs(line, temp_file);
+        }
+    }
+
+    fclose(file);
+    fclose(temp_file);
+
+    if (found) {
+        remove(file_path);
+        rename("/tmp/auth_temp.csv", file_path);
+        snprintf(response, sizeof(response), "User %s unbanned successfully\n", username);
+    } else {
+        remove("/tmp/auth_temp.csv");
+        snprintf(response, sizeof(response), "User %s not found\n", username);
+    }
+
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi untuk mencabut larangan pengguna tertentu dari saluran tertentu.
+
+## 4. Remove User
+Program ini menghapus pengguna tertentu dari sistem..
+
+## Penggunaan
+Program ini mendukung satu perintah utama: `REMOVE USER user1`.
+
+### Mencabut Larangan
+Untuk menghapus pengguna, gunakan perintah berikut:
+```sh
+[user/channel] REMOVE USER user1 
+user1 dikick
+```
+Contoh:
+```sh
+[qurbancare/care] REMOVE USER pen
+pen dikick
+```
+
+## Penjelasan Kode
+
+### Fungsi Utama
+1. **remove_user()**
+   - Menghapus pengguna tertentu dari sistem.
+  
+### Remove User
+```c
+void remove_user(const char *username, int sock) {
+    char response[BUFFER_SIZE];
+    char line[256];
+    char stored_username[50];
+    int found = 0;
+
+    FILE *file = fopen(USERS_FILE, "r+");
+    if (file == NULL) {
+        snprintf(response, sizeof(response), "Failed to open users file\n");
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+
+    FILE *temp_file = fopen("/tmp/users_temp.csv", "w");
+    if (temp_file == NULL) {
+        snprintf(response, sizeof(response), "Failed to create temp file\n");
+        send(sock, response, strlen(response), 0);
+        fclose(file);
+        return;
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        sscanf(line, "%*d,%[^,],%*s,%*s", stored_username);
+        if (strcmp(username, stored_username) == 0) {
+            found = 1;
+        } else {
+            fputs(line, temp_file);
+        }
+    }
+
+    fclose(file);
+    fclose(temp_file);
+
+    if (found) {
+        remove(USERS_FILE);
+        rename("/tmp/users_temp.csv", USERS_FILE);
+        snprintf(response, sizeof(response), "User %s removed successfully\n", username);
+    } else {
+        remove("/tmp/users_temp.csv");
+        snprintf(response, sizeof(response), "User %s not found\n", username);
+    }
+
+    send(sock, response, strlen(response), 0);
+}
+```
+Fungsi ini menghapus pengguna tertentu dari sistem.
